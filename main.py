@@ -1,193 +1,172 @@
 import heapq
+import os
+import json
 
-class CampusGraph:
+class Node:
+    def __init__(self, char=None, freq=0):
+        self.char = char
+        self.freq = freq
+        self.left = None
+        self.right = None
 
-    def __init__(self):
-        self.graph = {}
-        self.coords = {}
-
-    def add_building(self, name, x, y):
-        self.graph[name] = {}
-        self.coords[name] = (x, y)
-
-    # 曼哈顿距离
-    def add_road(self, a, b):
-        x1, y1 = self.coords[a]
-        x2, y2 = self.coords[b]
-
-        dist = abs(x1 - x2) + abs(y1 - y2)
-
-        self.graph[a][b] = dist
-        self.graph[b][a] = dist
-
-    # 构建连通图
-    def build_full_connection(self):
-        nodes = list(self.coords.keys())
-        visited = set()
-
-        visited.add(nodes[0])
-
-        while len(visited) < len(nodes):
-            min_edge = None
-            min_dist = float('inf')
-
-            for u in visited:
-                for v in nodes:
-                    if v in visited:
-                        continue
-
-                    x1, y1 = self.coords[u]
-                    x2, y2 = self.coords[v]
-
-                    dist = abs(x1 - x2) + abs(y1 - y2)
-
-                    if dist < min_dist:
-                        min_dist = dist
-                        min_edge = (u, v)
-
-            u, v = min_edge
-            self.add_road(u, v)
-            visited.add(v)
-
-    # Dijkstra
-    def dijkstra(self, start, end):
-        pq = [(0, start)]
-        dist = {node: float('inf') for node in self.graph}
-        prev = {}
-
-        dist[start] = 0
-
-        while pq:
-            d, node = heapq.heappop(pq)
-
-            if node == end:
-                break
-
-            for n, w in self.graph[node].items():
-                new_d = d + w
-
-                if new_d < dist[n]:
-                    dist[n] = new_d
-                    prev[n] = node
-                    heapq.heappush(pq, (new_d, n))
-
-        # 不可达判断
-        if dist[end] == float('inf'):
-            return [], float('inf')
-
-        path = []
-        cur = end
-
-        while cur in prev:
-            path.append(cur)
-            cur = prev[cur]
-
-        path.append(start)
-        path.reverse()
-
-        return path, dist[end]
-
-    # 导航输出
-    def navigation(self, path):
-        print("\n导航路线：")
-
-        total = 0
-
-        for i in range(len(path) - 1):
-            a = path[i]
-            b = path[i + 1]
-
-            x1, y1 = self.coords[a]
-            x2, y2 = self.coords[b]
-
-            dx = x2 - x1
-            dy = y2 - y1
-
-            d = abs(dx) + abs(dy)
-            total += d
-
-            if x1 == x2:
-                direction = "向北" if dy > 0 else "向南"
-                print(f"{a} -> {direction} {abs(dy)}米 -> {b}")
-
-            elif y1 == y2:
-                direction = "向东" if dx > 0 else "向西"
-                print(f"{a} -> {direction} {abs(dx)}米 -> {b}")
-
-            else:
-                # 先南北
-                dir_y = "向北" if dy > 0 else "向南"
-                print(f"{a} -> {dir_y} {abs(dy)}米")
-
-                # 再东西
-                dir_x = "向东" if dx > 0 else "向西"
-                print(f"然后 -> {dir_x} {abs(dx)}米 -> {b}")
-
-        print(f"\n总距离：{int(total)}米")
+    #堆排序依据
+    def __lt__(self, other):
+        return self.freq < other.freq
 
 
-# 初始化
-campus = CampusGraph()
 
-buildings = {
-"主楼": (285, 325),
-"教一楼": (235, 325),
-"教二楼": (235, 220),
-"教三楼": (135, 220),
-"教四楼": (135, 325),
-"科学会堂": (325, 270),
-"创新楼": (325, 220),
-"小松林": (215, 455),
-"时光广场": (215, 395),
-"行政办公楼": (235, 375),
+def count_frequency(text):
+    freq = {}
+    for ch in text:
+        freq[ch] = freq.get(ch, 0) + 1
+    return freq
 
-"图书馆": (285, 425),
-"学生发展中心": (285, 450),
-"学生活动中心": (250, 580),
-"经管楼": (250, 550),
-"学一公寓": (85, 395),
-"学二公寓": (185, 395),
-"学三公寓": (85, 455),
-"学四公寓": (185, 455),
-"学五公寓": (85, 500),
-"学六公寓": (325, 580),
-"学八公寓": (185, 500),
-"留学生公寓": (85, 550),
-"学九公寓": (85, 565),
-"学十公寓": (185, 580),
-"学十一公寓": (85, 595),
-"学十三公寓": (25, 470),
-"学29公寓": (425, 425),
 
-"学苑风味餐厅": (325, 450),
-"学生食堂": (355, 450),
-"综合食堂": (155, 550),
-"科研楼": (355, 580),
+#构建哈夫曼树
+def build_huffman_tree(freq_dict):
+    heap = [Node(ch, freq) for ch, freq in freq_dict.items()]
+    heapq.heapify(heap)
 
-"体育馆": (375, 325),
-"游泳馆": (425, 325),
-"体育场": (400, 270),
-"篮球场": (355, 425),
-}
+    while len(heap) > 1:
+        left = heapq.heappop(heap)
+        right = heapq.heappop(heap)
 
-for name, (x, y) in buildings.items():
-    campus.add_building(name, x, y)
+        parent = Node(None, left.freq + right.freq)
+        parent.left = left
+        parent.right = right
 
-campus.build_full_connection()
+        heapq.heappush(heap, parent)
 
-# 用户输入
-start = input("请输入起点：")
-end = input("请输入终点：")
+    return heap[0]
 
-if start not in campus.graph or end not in campus.graph:
-    print("输入错误！可选地点：")
-    print(list(campus.graph.keys()))
-    exit()
 
-path, dist = campus.dijkstra(start, end)
+#生成编码表
+def generate_codes(root):
+    codes = {}
 
-if not path:
-    print("无法到达")
-else:
-    print("\n最短路径:", " -> ".join(path))
-    campus.navigation(path)
+    def dfs(node, code):
+        if node is None:
+            return
+        if node.char is not None:
+            codes[node.char] = code
+        dfs(node.left, code + "0")
+        dfs(node.right, code + "1")
+
+    dfs(root, "")
+    return codes
+
+
+#编码文本
+def encode_text(text, codes):
+    return "".join(codes[ch] for ch in text)
+
+
+# 二进制写入（补齐8位）
+def pad_encoded_text(encoded_text):
+    extra_bits = 8 - len(encoded_text) % 8
+    for _ in range(extra_bits):
+        encoded_text += "0"
+
+    padded_info = "{0:08b}".format(extra_bits)
+    return padded_info + encoded_text
+
+
+def get_byte_array(padded_text):
+    b = bytearray()
+    for i in range(0, len(padded_text), 8):
+        byte = padded_text[i:i+8]
+        b.append(int(byte, 2))
+    return b
+
+
+# 压缩文件
+def compress(input_file, output_file):
+    with open(input_file, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    freq = count_frequency(text)
+    root = build_huffman_tree(freq)
+    codes = generate_codes(root)
+
+    encoded_text = encode_text(text, codes)
+    padded_text = pad_encoded_text(encoded_text)
+    byte_array = get_byte_array(padded_text)
+
+    # 保存压缩数据
+    with open(output_file, "wb") as f:
+        f.write(bytes(byte_array))
+
+    # 保存编码表
+    with open(output_file + ".json", "w", encoding="utf-8") as f:
+        json.dump(codes, f, ensure_ascii=False)
+
+    print("压缩完成！")
+
+
+#解码辅助
+def remove_padding(padded_text):
+    padded_info = padded_text[:8]
+    extra_bits = int(padded_info, 2)
+
+    encoded_text = padded_text[8:]
+    return encoded_text[:-extra_bits]
+
+
+def decode_text(encoded_text, codes):
+    reverse_codes = {v: k for k, v in codes.items()}
+
+    current_code = ""
+    decoded_text = ""
+
+    for bit in encoded_text:
+        current_code += bit
+        if current_code in reverse_codes:
+            decoded_text += reverse_codes[current_code]
+            current_code = ""
+
+    return decoded_text
+
+
+#解压文件
+def decompress(input_file, output_file):
+    with open(input_file, "rb") as f:
+        bit_string = ""
+        byte = f.read(1)
+        while byte:
+            byte = ord(byte)
+            bit_string += f"{byte:08b}"
+            byte = f.read(1)
+
+    encoded_text = remove_padding(bit_string)
+
+    # 读取编码表
+    with open(input_file + ".json", "r", encoding="utf-8") as f:
+        codes = json.load(f)
+
+    decoded_text = decode_text(encoded_text, codes)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(decoded_text)
+
+    print("解压完成！")
+
+
+#文件大小对比
+def compare_size(original, compressed):
+    original_size = os.path.getsize(original)
+    compressed_size = os.path.getsize(compressed)
+
+    print(f"原文件: {original_size} bytes")
+    print(f"压缩后: {compressed_size} bytes")
+    print(f"压缩率: {compressed_size / original_size:.2%}")
+
+
+#主程序测试
+if __name__ == "__main__":
+    input_file = "input.txt"
+    compressed_file = "compressed.bin"
+    output_file = "output.txt"
+
+    compress(input_file, compressed_file)
+    decompress(compressed_file, output_file)
+    compare_size(input_file, compressed_file)
